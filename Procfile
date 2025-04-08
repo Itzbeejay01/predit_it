@@ -1,0 +1,1 @@
+web: streamlit run simplified_app.py --server.port $PORT --server.enableCORS false --server.enableXsrfProtection false 
