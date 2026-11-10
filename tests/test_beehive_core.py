@@ -34,6 +34,8 @@ class DummyBroker:
         return self.meta
     def loss_for_one_lot(self, symbol, side, entry, stop):
         return abs(entry-stop) * 100000
+    def open_position_risk(self, positions):
+        return sum(getattr(pos, "risk", 0.0) for pos in positions)
 
 
 def candle_frame(n=500):
@@ -76,6 +78,13 @@ class TestRiskAndStorage(unittest.TestCase):
 
     def test_existing_symbol_position_blocks_order(self):
         self.broker.open_positions = [SimpleNamespace(symbol="EURUSD")]
+        with self.assertRaises(RiskRejected):
+            propose(self.broker, self.store, self.settings, idea())
+
+    def test_open_position_risk_reduces_remaining_daily_budget(self):
+        self.store.start_equity(1000)
+        self.broker.equity = 985
+        self.broker.open_positions = [SimpleNamespace(symbol="GBPUSD", risk=6)]
         with self.assertRaises(RiskRejected):
             propose(self.broker, self.store, self.settings, idea())
 

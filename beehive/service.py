@@ -1,6 +1,6 @@
 """Orchestrates market analysis, alerts and tightly gated demo order execution."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 from .broker import Mt5Broker, BrokerError
@@ -30,15 +30,25 @@ class BeeHiveService:
             return False
 
     def _load(self, symbol):
-        return (self.broker.candles(symbol, "M15", 600),
-                self.broker.candles(symbol, "H1", 200))
+        m15 = self.broker.candles(symbol, "M15", 600)
+        h1 = self.broker.candles(symbol, "H1", 200)
+        current = datetime.now(timezone.utc)
+        # MT5 candle timestamps are opening times, not close times.
+        if current - (m15.index[-1].to_pydatetime() + timedelta(minutes=15)) > timedelta(minutes=20):
+            raise BrokerError("M15 market data is stale; no signal may be executed.")
+        if current - (h1.index[-1].to_pydatetime() + timedelta(hours=1)) > timedelta(minutes=75):
+            raise BrokerError("H1 market data is stale; no signal may be executed.")
+        return m15, h1
 
     def scan(self):
         """One idempotent pass. Use schedule/daemon for continuous execution."""
         outcomes = {}
         self.broker.connect()
         try:
-            self.telegram.handle_admin_commands(self.store)
+            try:
+                self.telegram.handle_admin_commands(self.store)
+            except Exception:
+                log.warning("Telegram command polling failed; demo safety defaults remain in effect.")
             self.broker.require_demo()
             for symbol in self.settings.symbols:
                 try:

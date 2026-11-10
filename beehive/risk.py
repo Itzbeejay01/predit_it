@@ -63,7 +63,10 @@ def propose(broker, store, settings, signal):
     one_lot_loss = broker.loss_for_one_lot(symbol, side, entry, stop)
     intended_cash = float(account.equity) * settings.risk_fraction
     # Reduce remaining risk allocation as we approach the daily limit.
-    remaining_daily_cash = max(0, float(account.equity) - today_start * (1 - settings.daily_loss_fraction))
+    open_risk = broker.open_position_risk(all_positions)
+    remaining_daily_cash = max(
+        0, float(account.equity) - today_start * (1 - settings.daily_loss_fraction) - open_risk
+    )
     allowed_cash = min(intended_cash, remaining_daily_cash)
     if allowed_cash <= 0:
         raise RiskRejected("No remaining daily risk budget.")

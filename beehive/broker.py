@@ -113,6 +113,26 @@ class Mt5Broker:
             raise BrokerError("Cannot verify open positions; refusing new orders.")
         return list(positions)
 
+    def open_position_risk(self, positions):
+        """Potential loss from CURRENT marked equity to each known stop, in account currency.
+
+        Require a stop on every open position; foreign/manual positions can consume
+        the same account-level daily loss budget as BeeHive.
+        """
+        self.require_demo()
+        at_risk = 0.0
+        for pos in positions:
+            if not pos.sl or pos.volume <= 0:
+                raise BrokerError("An open position has no SL; refusing additional orders.")
+            side = self.mt5.ORDER_TYPE_BUY if pos.type == self.mt5.POSITION_TYPE_BUY else self.mt5.ORDER_TYPE_SELL
+            tick = self.quote(pos.symbol)
+            current = float(tick.bid if side == self.mt5.ORDER_TYPE_BUY else tick.ask)
+            projected = self.mt5.order_calc_profit(side, pos.symbol, pos.volume, current, pos.sl)
+            if projected is None or not math.isfinite(float(projected)):
+                raise BrokerError("Could not evaluate existing position risk.")
+            at_risk += max(0.0, -float(projected))
+        return at_risk
+
     def loss_for_one_lot(self, symbol, side, entry, stop):
         self.require_demo()
         kind = self.mt5.ORDER_TYPE_BUY if side == "BUY" else self.mt5.ORDER_TYPE_SELL
@@ -134,6 +154,13 @@ class Mt5Broker:
         if abs(current - plan.entry) > plan.max_deviation_price:
             raise BrokerError("Price moved from validated entry; refusing stale trade.")
         info = self.info(plan.symbol)
+        # Two independent pre-send guards: risk cannot grow and no duplicate positions.
+        existing = self.positions()
+        if len(existing) >= self.settings.max_positions or any(p.symbol == plan.symbol for p in existing):
+            raise BrokerError("Position limit changed before submission.")
+        actual_loss = self.loss_for_one_lot(plan.symbol, plan.side, current, plan.stop) * plan.volume
+        if actual_loss > plan.risk_cash + 1e-7 or actual_loss > float(account.equity) * self.settings.risk_fraction + 1e-7:
+            raise BrokerError("Market movement increased expected risk; order cancelled.")
         if info.trade_stops_level * info.point > abs(current - plan.stop):
             raise BrokerError("Broker stop-distance restriction violated.")
         request = {
