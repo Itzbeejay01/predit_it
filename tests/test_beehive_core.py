@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
@@ -13,6 +14,8 @@ from beehive.ml import feature_frame, research
 from beehive.risk import RiskRejected, propose
 from beehive.signals import Signal, analyze, features
 from beehive.storage import Store
+from beehive.service import BeeHiveService
+from beehive.ml import ResearchResult
 
 
 class DummyBroker:
@@ -163,6 +166,76 @@ class TestBacktest(unittest.TestCase):
         short = candle_frame(100)
         with self.assertRaises(ValueError):
             simulate(short, short, "EURUSD", 0.00001)
+
+
+class FakeTelegram:
+    def __init__(self):
+        self.messages = []
+    def handle_admin_commands(self, store):
+        return None
+    def send(self, message):
+        self.messages.append(message)
+        return True
+
+
+class FakeExecutionBroker(DummyBroker):
+    def __init__(self):
+        super().__init__()
+        self.sent = 0
+    def connect(self):
+        return self
+    def close(self):
+        return None
+    def candles(self, desired, timeframe="M15", count=600):
+        interval = "15min" if timeframe == "M15" else "1h"
+        frame = candle_frame(count)
+        frame.index = pd.date_range(
+            end=pd.Timestamp.now(tz="UTC") - pd.Timedelta(minutes=15 if timeframe == "M15" else 60),
+            periods=count, freq=interval)
+        return frame
+    def place_demo_order(self, plan):
+        self.sent += 1
+        return SimpleNamespace(order=98765)
+
+
+class TestServiceIntegration(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.store = Store(Path(self.temp.name) / "journal.db")
+        self.telegram = FakeTelegram()
+        self.broker = FakeExecutionBroker()
+        self.store.set_halted(False)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def service(self, enabled):
+        return BeeHiveService(
+            settings=Settings(database=Path(self.temp.name)/"journal.db",
+                              demo_auto_execute=enabled),
+            store=self.store, broker=self.broker, telegram=self.telegram)
+
+    def test_demo_order_only_after_explicit_opt_in(self):
+        score = ResearchResult(0.6, 0.53, 0.25, 0.26, 100)
+        with patch("beehive.service.analyze", return_value=idea()), patch(
+            "beehive.service.research", return_value=score
+        ):
+            result = self.service(enabled=False).scan()
+        self.assertEqual(result["EURUSD"], "SIGNAL ONLY")
+        self.assertEqual(self.broker.sent, 0)
+
+    def test_demo_order_submitted_only_once_per_signal(self):
+        score = ResearchResult(0.6, 0.53, 0.25, 0.26, 100)
+        service = self.service(enabled=True)
+        with patch("beehive.service.analyze", return_value=idea()), patch(
+            "beehive.service.research", return_value=score
+        ):
+            first = service.scan()
+            second = service.scan()
+        self.assertEqual(first["EURUSD"], "DEMO ORDER SUBMITTED")
+        self.assertEqual(second["EURUSD"], "ALREADY SEEN")
+        self.assertEqual(self.broker.sent, 1)
+        self.assertTrue(any("DEMO" in m for m in self.telegram.messages))
 
 
 class TestHardDemoGate(unittest.TestCase):

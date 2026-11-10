@@ -20,18 +20,23 @@ class Mt5Broker:
         except ImportError as exc:
             raise BrokerError("MetaTrader5 Python package requires a supported Windows terminal environment.") from exc
         opts = {}
-        if self.settings.mt5_terminal_path:
-            opts["path"] = self.settings.mt5_terminal_path
         if self.settings.mt5_login:
             if not self.settings.mt5_password or not self.settings.mt5_server:
                 raise BrokerError("MT5_PASSWORD and MT5_SERVER are required with MT5_LOGIN.")
             opts.update(login=int(self.settings.mt5_login),
                         password=self.settings.mt5_password,
                         server=self.settings.mt5_server)
-        if not mt5.initialize(**opts):
+        # MT5's path is the optional first positional argument.
+        path = self.settings.mt5_terminal_path
+        connected = mt5.initialize(path, **opts) if path else mt5.initialize(**opts)
+        if not connected:
             raise BrokerError("MT5 initialization failed; check terminal connection and demo credentials.")
         self.mt5 = mt5
-        self.require_demo()
+        try:
+            self.require_demo()
+        except Exception:
+            self.close()
+            raise
         return self
 
     def close(self):

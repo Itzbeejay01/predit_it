@@ -49,7 +49,9 @@ class BeeHiveService:
                 self.telegram.handle_admin_commands(self.store)
             except Exception:
                 log.warning("Telegram command polling failed; demo safety defaults remain in effect.")
-            self.broker.require_demo()
+            account = self.broker.require_demo()
+            # Establish the day's starting equity even if no setup ever appears.
+            self.store.start_equity(float(account.equity))
             for symbol in self.settings.symbols:
                 try:
                     m15, h1 = self._load(symbol)
