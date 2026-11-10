@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from beehive.broker import BrokerError, Mt5Broker
+from beehive.backtest import _fill_exit, simulate
 from beehive.config import Settings
 from beehive.ml import feature_frame, research
 from beehive.risk import RiskRejected, propose
@@ -140,6 +141,28 @@ class TestMarketResearch(unittest.TestCase):
         a = feature_frame(candle_frame(100))
         b = feature_frame(candle_frame(150)).iloc[:100]
         np.testing.assert_allclose(a.values, b.values, equal_nan=True)
+
+
+class TestBacktest(unittest.TestCase):
+    def test_ambiguous_bar_counts_as_stop(self):
+        t = pd.date_range("2026-01-01", periods=1, freq="15min", tz="UTC")
+        future = pd.DataFrame([{"open": 1.1, "high": 1.13, "low": 1.08,
+                                "close": 1.1, "spread": 2}], index=t)
+        _, price, reason = _fill_exit("BUY", 1.1, 1.09, 1.12, future, 0.0001)
+        self.assertEqual(reason, "STOP")
+        self.assertAlmostEqual(price, 1.09)
+
+    def test_spread_missing_is_not_free_execution(self):
+        t = pd.date_range("2026-01-01", periods=1, freq="15min", tz="UTC")
+        future = pd.DataFrame([{"open": 1.1, "high": 1.13, "low": 1.08,
+                                "close": 1.1, "spread": 0}], index=t)
+        with self.assertRaises(ValueError):
+            _fill_exit("BUY", 1.1, 1.09, 1.12, future, 0.0001)
+
+    def test_short_history_rejected(self):
+        short = candle_frame(100)
+        with self.assertRaises(ValueError):
+            simulate(short, short, "EURUSD", 0.00001)
 
 
 class TestHardDemoGate(unittest.TestCase):

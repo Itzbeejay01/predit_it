@@ -6,6 +6,8 @@ import time
 from zoneinfo import ZoneInfo
 
 from .config import Settings
+from .broker import Mt5Broker
+from .backtest import simulate
 from .service import BeeHiveService
 from .storage import Store
 from .telegram import Telegram
@@ -50,7 +52,7 @@ def daemon(service):
 def main():
     parser = argparse.ArgumentParser(description="BeeHive demo-only forex intelligence bot")
     parser.add_argument("command", choices=[
-        "scan", "outlook", "summary", "status", "stop", "resume", "daemon"
+        "scan", "outlook", "summary", "status", "stop", "resume", "daemon", "backtest"
     ])
     parser.add_argument("--session", default="Daily", help="Outlook label")
     args = parser.parse_args()
@@ -70,6 +72,20 @@ def main():
         print(f"Demo auto-execution opt-in: {settings.demo_auto_execute}")
         for row in store.recent_signals(10):
             print(" | ".join(map(str, row)))
+        return
+    if args.command == "backtest":
+        broker = Mt5Broker(settings).connect()
+        try:
+            for symbol in settings.symbols:
+                try:
+                    m15, h1 = broker.candles(symbol, "M15", 2000), broker.candles(symbol, "H1", 600)
+                    meta = broker.info(broker.resolve_symbol(symbol))
+                    metrics = simulate(m15, h1, symbol, float(meta.point))["metrics"]
+                    print(f"{symbol}: {metrics}")
+                except Exception as exc:
+                    print(f"{symbol}: backtest unavailable ({type(exc).__name__}: {exc})")
+        finally:
+            broker.close()
         return
     service = BeeHiveService(settings=settings, store=store, telegram=Telegram(settings))
     if args.command == "scan":

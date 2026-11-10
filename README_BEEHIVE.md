@@ -95,3 +95,15 @@ Streamlit dashboards are intentionally unchanged during this first increment.
    signal product.
 
 Do not sell or advertise these signals as guaranteed returns.
+
+## Historical candle backtest (research only)
+
+Run `python -m beehive.cli backtest` on an authenticated Windows MT5
+**demo** terminal. Uses up to 2,000 M15 and 600 H1 broker candles per symbol.
+The simulator uses the recorded MT5 spread, next-candle opening entry,
+conservative stop-first intrabar tie-breaking, gap-through-stop treatment,
+and a maximum 16-candle holding horizon. It intentionally **does not**
+model commission, swaps, other slippage, partial fills or margin calls.
+The reported return is a simplified research statistic, not a proven
+or audited investment return. Never optimise directly on the reported
+backtest and then describe it as out-of-sample performance.
