@@ -1,0 +1,3 @@
+# Install on Windows after requirements-beehive.txt.
+# The official MetaTrader5 Python extension requires a compatible Windows terminal.
+MetaTrader5>=5.0.45
