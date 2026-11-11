@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from .config import Settings
 from .broker import Mt5Broker
 from .backtest import simulate
+from .preflight import check_environment
 from .service import BeeHiveService
 from .storage import Store
 from .telegram import Telegram
@@ -52,7 +53,7 @@ def daemon(service):
 def main():
     parser = argparse.ArgumentParser(description="BeeHive demo-only forex intelligence bot")
     parser.add_argument("command", choices=[
-        "scan", "outlook", "summary", "status", "stop", "resume", "daemon", "backtest"
+        "scan", "outlook", "summary", "status", "stop", "resume", "daemon", "backtest", "preflight"
     ])
     parser.add_argument("--session", default="Daily", help="Outlook label")
     args = parser.parse_args()
@@ -72,6 +73,15 @@ def main():
         print(f"Demo auto-execution opt-in: {settings.demo_auto_execute}")
         for row in store.recent_signals(10):
             print(" | ".join(map(str, row)))
+        return
+    if args.command == "preflight":
+        result = check_environment(Mt5Broker(settings), settings)
+        print("Account:", result["account"])
+        if result.get("error"):
+            print("Connection:", result["error"])
+        for symbol, status in result["symbols"].items():
+            print(symbol, status)
+        print("Read-only diagnostic completed. No orders were placed.")
         return
     if args.command == "backtest":
         broker = Mt5Broker(settings).connect()

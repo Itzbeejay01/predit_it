@@ -42,7 +42,10 @@ Gaps, slippage, disconnections and overlapping positions can cause greater losse
 4. Create a Telegram bot with BotFather. Configure \`TELEGRAM_BOT_TOKEN\`,
    a destination \`TELEGRAM_CHAT_ID\`, and your numeric \`TELEGRAM_ADMIN_ID\`.
    Admin commands from any other account are ignored.
-5. First run **read-only** analysis:
+5. First check the connection and all market symbols, **without submitting orders**:
+   `python -m beehive.cli preflight`
+   Confirm that it reports DEMO, the expected symbol names, and recent candles.
+   Then run **read-only** analysis:
    \`python -m beehive.cli outlook\`
    \`python -m beehive.cli scan\`
    \`python -m beehive.cli status\`
@@ -107,3 +110,14 @@ model commission, swaps, other slippage, partial fills or margin calls.
 The reported return is a simplified research statistic, not a proven
 or audited investment return. Never optimise directly on the reported
 backtest and then describe it as out-of-sample performance.
+
+## Operational safety update
+
+- The system now refuses new entries if any pending order exists on the broker
+  account. This is intentionally conservative for a shared demo account.
+- The daily equity anchor uses the **Africa/Lagos calendar day**. This anchor
+  is the first observed equity that day, not an MT5-confirmed midnight balance.
+- Run `python -m beehive.cli preflight` before any demo execution to validate
+  DEMO status, trade permissions, symbol names, spreads and candle freshness
+  without sending a trade. On market closures, stale data is expected and is
+  correctly reported as a failed market readiness check.

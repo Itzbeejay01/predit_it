@@ -1,6 +1,7 @@
 """SQLite journal: reproducible signal history, daily equity anchors, kill switch."""
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import sqlite3
 
@@ -38,7 +39,7 @@ class Store:
             db.close()
 
     def start_equity(self, equity):
-        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        day = datetime.now(ZoneInfo("Africa/Lagos")).strftime("%Y-%m-%d")
         with self.connection() as db:
             db.execute("INSERT OR IGNORE INTO equity_day (day, initial_equity) VALUES (?,?)",
                        (day, equity))

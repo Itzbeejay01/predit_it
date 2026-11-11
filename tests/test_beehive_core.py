@@ -9,6 +9,7 @@ import pandas as pd
 
 from beehive.broker import BrokerError, Mt5Broker
 from beehive.backtest import _fill_exit, simulate
+from beehive.preflight import check_environment
 from beehive.config import Settings
 from beehive.ml import feature_frame, research
 from beehive.risk import RiskRejected, propose
@@ -30,6 +31,8 @@ class DummyBroker:
         return SimpleNamespace(equity=self.equity)
     def positions(self):
         return self.open_positions
+    def pending_orders(self):
+        return []
     def resolve_symbol(self, desired):
         return desired
     def quote(self, symbol):
@@ -89,6 +92,11 @@ class TestRiskAndStorage(unittest.TestCase):
         self.store.start_equity(1000)
         self.broker.equity = 985
         self.broker.open_positions = [SimpleNamespace(symbol="GBPUSD", risk=6)]
+        with self.assertRaises(RiskRejected):
+            propose(self.broker, self.store, self.settings, idea())
+
+    def test_pending_orders_block_submission(self):
+        self.broker.pending_orders = lambda: [SimpleNamespace(symbol="GBPUSD")]
         with self.assertRaises(RiskRejected):
             propose(self.broker, self.store, self.settings, idea())
 
@@ -236,6 +244,17 @@ class TestServiceIntegration(unittest.TestCase):
         self.assertEqual(second["EURUSD"], "ALREADY SEEN")
         self.assertEqual(self.broker.sent, 1)
         self.assertTrue(any("DEMO" in m for m in self.telegram.messages))
+
+
+class TestPreflight(unittest.TestCase):
+    def test_read_only_preflight_cannot_submit_demo_order(self):
+        broker = FakeExecutionBroker()
+        broker.mt5 = SimpleNamespace(terminal_info=lambda: SimpleNamespace(trade_allowed=True))
+        account_before = broker.sent
+        report = check_environment(broker, Settings())
+        self.assertEqual(report["account"], "DEMO")
+        self.assertEqual(report["symbols"]["EURUSD"]["result"], "OK")
+        self.assertEqual(account_before, broker.sent)
 
 
 class TestHardDemoGate(unittest.TestCase):

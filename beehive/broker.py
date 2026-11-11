@@ -111,6 +111,13 @@ class Mt5Broker:
             raise BrokerError(f"No symbol metadata for {symbol}.")
         return info
 
+    def pending_orders(self):
+        self.require_demo()
+        orders = self.mt5.orders_get()
+        if orders is None:
+            raise BrokerError("Cannot inspect broker pending orders; refusing a new trade.")
+        return list(orders)
+
     def positions(self):
         self.require_demo()
         positions = self.mt5.positions_get()
@@ -161,6 +168,8 @@ class Mt5Broker:
         info = self.info(plan.symbol)
         # Two independent pre-send guards: risk cannot grow and no duplicate positions.
         existing = self.positions()
+        if self.pending_orders():
+            raise BrokerError("Pending broker orders exist; refusing new automated entries.")
         if len(existing) >= self.settings.max_positions or any(p.symbol == plan.symbol for p in existing):
             raise BrokerError("Position limit changed before submission.")
         actual_loss = self.loss_for_one_lot(plan.symbol, plan.side, current, plan.stop) * plan.volume

@@ -35,6 +35,8 @@ def propose(broker, store, settings, signal):
     if float(account.equity) <= today_start * (1 - settings.daily_loss_fraction):
         raise RiskRejected("Daily 2% equity drawdown limit reached.")
     all_positions = broker.positions()
+    if broker.pending_orders():
+        raise RiskRejected("Unverified pending orders on the account; refusing new entries.")
     if len(all_positions) >= settings.max_positions:
         raise RiskRejected("Maximum two concurrent positions reached.")
     symbol = broker.resolve_symbol(signal.symbol)
