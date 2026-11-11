@@ -121,3 +121,26 @@ backtest and then describe it as out-of-sample performance.
   DEMO status, trade permissions, symbol names, spreads and candle freshness
   without sending a trade. On market closures, stale data is expected and is
   correctly reported as a failed market readiness check.
+
+
+## Mac M1/M2 (optional experimental research path)
+
+MetaQuotes' Mac installer runs MT5 using Wine; the official Python
+MetaTrader5 module itself is Windows-only. BeeHive now auto-selects a
+read-only macOS research adapter. The optional third-party mt5_mac v0.3.0
+beta package is NOT official and bootstraps its own Wine Python process.
+Review that software and its permissions before using it. Use DEMO only.
+
+- Install MT5 for Mac from metatrader5.com and log in to Exness DEMO.
+- Create a Python 3.11 environment and install requirements-beehive.txt.
+- Optionally install mt5_mac==0.3.0 after reviewing the package.
+- Run: python -m beehive.cli preflight
+- Run: python -m beehive.cli outlook
+- Run: python -m beehive.cli scan
+
+Mac scanning/alerts work only while the terminal and Mac are awake and
+connected. The Mac connector always blocks trade execution, even if
+DEMO_AUTO_EXECUTE=true, because the published adapter lacks the broker risk
+validation operations required by this implementation. The next integration
+step is a first-party MQL5 Expert Advisor with demo-only order execution
+and independently verified broker-side risk controls.

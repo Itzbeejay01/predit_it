@@ -6,7 +6,7 @@ import time
 from zoneinfo import ZoneInfo
 
 from .config import Settings
-from .broker import Mt5Broker
+from .mac_broker import select_broker
 from .backtest import simulate
 from .preflight import check_environment
 from .service import BeeHiveService
@@ -75,7 +75,7 @@ def main():
             print(" | ".join(map(str, row)))
         return
     if args.command == "preflight":
-        result = check_environment(Mt5Broker(settings), settings)
+        result = check_environment(select_broker(settings), settings)
         print("Account:", result["account"])
         if result.get("error"):
             print("Connection:", result["error"])
@@ -84,7 +84,7 @@ def main():
         print("Read-only diagnostic completed. No orders were placed.")
         return
     if args.command == "backtest":
-        broker = Mt5Broker(settings).connect()
+        broker = select_broker(settings).connect()
         try:
             for symbol in settings.symbols:
                 try:

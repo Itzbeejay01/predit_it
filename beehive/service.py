@@ -3,7 +3,8 @@ import logging
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
-from .broker import Mt5Broker, BrokerError
+from .broker import BrokerError
+from .mac_broker import select_broker
 from .config import Settings
 from .ml import research
 from .risk import propose, RiskRejected
@@ -18,7 +19,7 @@ class BeeHiveService:
     def __init__(self, settings=None, broker=None, store=None, telegram=None):
         self.settings = settings or Settings()
         self.store = store or Store(self.settings.database)
-        self.broker = broker or Mt5Broker(self.settings)
+        self.broker = broker or select_broker(self.settings)
         self.telegram = telegram or Telegram(self.settings)
 
     def safe_send(self, text):

@@ -10,6 +10,7 @@ import pandas as pd
 from beehive.broker import BrokerError, Mt5Broker
 from beehive.backtest import _fill_exit, simulate
 from beehive.preflight import check_environment
+from beehive.mac_broker import MacMt5Broker
 from beehive.config import Settings
 from beehive.ml import feature_frame, research
 from beehive.risk import RiskRejected, propose
@@ -244,6 +245,38 @@ class TestServiceIntegration(unittest.TestCase):
         self.assertEqual(second["EURUSD"], "ALREADY SEEN")
         self.assertEqual(self.broker.sent, 1)
         self.assertTrue(any("DEMO" in m for m in self.telegram.messages))
+
+
+class TestMacResearch(unittest.TestCase):
+    def test_read_only_on_demo(self):
+        from datetime import datetime, timezone
+        now = int(datetime.now(timezone.utc).timestamp())
+        candles = [SimpleNamespace(time=now-(100-i)*900, open=1.1,
+                                   high=1.101, low=1.099, close=1.1,
+                                   spread=10, tick_volume=100, real_volume=0)
+                   for i in range(100)]
+        backend = SimpleNamespace(
+            initialize=lambda: True, shutdown=lambda: None,
+            account_info=lambda: SimpleNamespace(trade_mode=0, equity=1000),
+            symbols_get=lambda: [SimpleNamespace(name="EURUSD")],
+            symbol_select=lambda *args: True,
+            symbol_info=lambda symbol: SimpleNamespace(point=0.00001),
+            copy_rates_from_pos=lambda *args: candles,
+            symbol_info_tick=lambda symbol: SimpleNamespace(time=now,bid=1.1,ask=1.1001),
+            positions_get=lambda: [], orders_get=lambda: [],
+            TIMEFRAME_M15=15, TIMEFRAME_H1=60)
+        adapter = MacMt5Broker(Settings(), mt5_override=backend).connect()
+        self.assertEqual(len(adapter.candles("EURUSD", count=100)), 100)
+        with self.assertRaises(BrokerError):
+            adapter.place_demo_order(None)
+        adapter.close()
+
+    def test_mac_refuses_real_account(self):
+        backend = SimpleNamespace(
+            initialize=lambda: True, shutdown=lambda: None,
+            account_info=lambda: SimpleNamespace(trade_mode=1, equity=5000))
+        with self.assertRaises(BrokerError):
+            MacMt5Broker(Settings(), mt5_override=backend).connect()
 
 
 class TestPreflight(unittest.TestCase):

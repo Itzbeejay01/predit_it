@@ -10,7 +10,8 @@ def check_environment(broker, settings):
         account = broker.require_demo()
         report["account"] = "DEMO"
         report["equity_positive"] = account.equity > 0
-        terminal = broker.mt5.terminal_info()
+        terminal_info = getattr(broker.mt5, 'terminal_info', None)
+        terminal = terminal_info() if callable(terminal_info) else None
         report["terminal_trade_allowed"] = bool(terminal and terminal.trade_allowed)
         report["account_trade_allowed"] = bool(getattr(account, "trade_allowed", False))
         report["execution_enabled"] = bool(
